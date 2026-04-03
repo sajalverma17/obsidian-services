@@ -1,0 +1,15 @@
+services:
+  couchdb:
+    image: couchdb:latest
+    container_name: couchdb
+    user: 5984:5984
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+    volumes:
+      - ./data:/opt/couchdb/data
+      - ./etc:/opt/couchdb/etc/local.d
+    ports:
+      - 5984:5984
+    restart: unless-stopped
+    stop_grace_period: 20s
