@@ -14,13 +14,34 @@ COUCHDB_DATABASE = os.getenv('COUCHDB_DATABASE')
 COUCHDB_AUTH = (COUCHDB_USER, COUCHDB_PASSWORD)
 
 POLL_INTERVAL_SECONDS = 600
-# When firt poll at t-00:01 but next at t+10:01 instead of t+09:59 due to random drifts
-# we still want to notify for tasks due at t+10:00
+# Tolerance window because if first poll is at t-00:01, next may happen at t+10:01 instead of t+09:59 due to random drifts
 DRIFT_TOLERANCE_SECONDS = 10
 
 def read_from_couchdb(file_path):
-    # TODO - construct file from couchdb chucks
-    return read_from_disk(file_path)
+    try:
+        print(f"Reading '{file_path}' from CouchDB...")
+        find_url = f"{COUCHDB_BASE_URL}/{COUCHDB_DATABASE}/_find"
+        query = {"selector": {"path": file_path}}
+        response = requests.post(find_url, json=query, auth=COUCHDB_AUTH, timeout=10).json()
+
+        docs = response.get('docs', [])
+        if not docs:
+            print(f"Error: File '{file_path}' not found on CouchDB.")
+            return None
+
+        doc_metadata = docs[0]
+        chunk_ids = doc_metadata.get('children', [])
+
+        file_text = "".join([
+            requests.get(f"{COUCHDB_BASE_URL}/{COUCHDB_DATABASE}/{c_id}", auth=COUCHDB_AUTH, timeout=5).json().get('data', '')
+            for c_id in chunk_ids
+        ])
+
+        return file_text.splitlines()
+
+    except Exception as ex:
+        print(f"Error: Unable to construct '{file_path}' from CouchDB: '{ex}'.")
+        return None
 
 def read_from_disk(file_path):
     lines = None
@@ -37,9 +58,11 @@ def read_from_disk(file_path):
 
 def read_file(file_path):
     if COUCHDB_BASE_URL and COUCHDB_DATABASE:
-        return read_from_couchdb(file_path)
-    else:
-        return read_from_disk(file_path)
+        lines = read_from_couchdb(file_path)
+        if lines is not None:
+            return lines
+
+    return read_from_disk(file_path)
 
 
 def process_todos(file_path):

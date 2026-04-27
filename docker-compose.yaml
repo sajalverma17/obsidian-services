@@ -13,6 +13,10 @@ services:
       - 5984:5984
     restart: unless-stopped
     stop_grace_period: 20s
+    # Create index on path field, notifier looks up files by path:
+    # curl -X POST http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@localhost:5984/obsidian/_index \
+    # -H "Content-Type: application/json" \
+    # -d '{"index": {"fields": ["path"]}, "name": "path-json-index", "type": "json"}'
 
   ntfy:
     image: binwiederhier/ntfy
@@ -46,7 +50,13 @@ services:
       - ./notifier.py:/app/notifier.py
       - F:/D/Notes/Personal:/data
     environment:
+      TZ: "Europe/Oslo"
       PYTHONUNBUFFERED: "1"
+      COUCHDB_BASE_URL: ${COUCHDB_BASE_URL}
+      COUCHDB_DATABASE: ${COUCHDB_DATABASE}
+      COUCHDB_USER: ${COUCHDB_USER}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD}
+      # Command-line arguments for notifier.py:
       NTFY_BASE_URL: ${NTFY_BASE_URL}
       FILE_PATH: ${NOTIFIER_FILE_PATH} # Case-sensitive file path relative to vault root
       TOPIC_NAME: ${NOTIFIER_TOPIC_NAME}
