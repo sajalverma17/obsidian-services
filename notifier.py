@@ -43,26 +43,8 @@ def read_from_couchdb(file_path):
         print(f"Error: Unable to construct '{file_path}' from CouchDB: '{ex}'.")
         return None
 
-def read_from_disk(file_path):
-    lines = None
-    if lines is None:
-        try:
-            print(f"Reading '{file_path}' from disk...")
-            with open(file_path, 'r', encoding='utf-8') as file:
-                lines = file.readlines()
-        except FileNotFoundError:
-            print(f"Error: File '{file_path}' not found on disk.")
-            lines = []
-
-    return lines
-
 def read_file(file_path):
-    if COUCHDB_BASE_URL and COUCHDB_DATABASE:
-        lines = read_from_couchdb(file_path)
-        if lines is not None:
-            return lines
-
-    return read_from_disk(file_path)
+    return read_from_couchdb(file_path)
 
 
 def process_todos(file_path):

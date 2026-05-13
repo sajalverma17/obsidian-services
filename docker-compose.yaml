@@ -42,10 +42,9 @@ services:
   notifier:
     image: python:3.11-slim
     container_name: notifier
-    working_dir: /data
     volumes:
       - ./notifier.py:/app/notifier.py
-      - F:/D/Notes/Personal:/data
+      - ./FirewallRootCertificate.crt:/usr/local/share/ca-certificates/FirewallRootCertificate.crt:ro
     environment:
       TZ: "Europe/Oslo"
       PYTHONUNBUFFERED: "1"
@@ -58,6 +57,7 @@ services:
       FILE_PATH: ${NOTIFIER_FILE_PATH} # Case-sensitive file path relative to vault root
       TOPIC_NAME: ${NOTIFIER_TOPIC_NAME}
     command: >
-      sh -c "pip install --no-cache-dir requests &&
+      sh -c "cat /usr/local/share/ca-certificates/FirewallRootCertificate.crt >> /etc/ssl/certs/ca-certificates.crt &&
+             pip install --no-cache-dir --cert /etc/ssl/certs/ca-certificates.crt requests &&
              python /app/notifier.py $$NTFY_BASE_URL $$FILE_PATH $$TOPIC_NAME --loop"
     restart: always
