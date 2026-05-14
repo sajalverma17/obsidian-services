@@ -52,6 +52,8 @@ def process_todos(file_path):
     todo_pattern = re.compile(r'^\s*-\s*\[ \]\s*(.*)$')
     # Match @ YYYY-MM-DD HH:MM (Task name @ 2024-06-30 14:00)
     datetime_pattern = re.compile(r'@ (\d{4}-\d{2}-\d{2} \d{2}:\d{2})')
+    # Match @ HH:MM only (Task name @ 15:00)
+    time_only_pattern = re.compile(r'@ (\d{2}:\d{2})\s*$')
     todos = []
 
     lines = read_file(file_path)
@@ -62,15 +64,25 @@ def process_todos(file_path):
             todo_text = match.group(1).strip()
             if todo_text:
                 datetime_match = datetime_pattern.search(todo_text)
+                time_only_match = time_only_pattern.search(todo_text)
                 if datetime_match and datetime_match.group(1):
                     try:
-                        due = datetime.strptime(datetime_match.group(1), '%Y-%m-%d %H:%M')
                         now = datetime.now()
+                        due = datetime.strptime(datetime_match.group(1), '%Y-%m-%d %H:%M')
                         # Notify if due time passed within last 10 mins (+ drift), once per day (modulo 86400s)
                         if due <= now and (now - due).total_seconds() % 86400 <= POLL_INTERVAL_SECONDS + DRIFT_TOLERANCE_SECONDS:
                             todos.append(todo_text)
                     except ValueError:
                         print(f"Warning: Invalid datetime format in line: {line.strip()}")
+                elif time_only_match and time_only_match.group(1):
+                    try:
+                        now = datetime.now()
+                        due = datetime.strptime(time_only_match.group(1), '%H:%M').replace(year=now.year, month=now.month, day=now.day)
+                        # Same daily check
+                        if due <= now and (now - due).total_seconds() <= POLL_INTERVAL_SECONDS + DRIFT_TOLERANCE_SECONDS:
+                            todos.append(todo_text)
+                    except ValueError:
+                        print(f"Warning: Invalid time format in line: {line.strip()}")
 
     return todos
 
