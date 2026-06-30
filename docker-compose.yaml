@@ -42,11 +42,13 @@ services:
   notifier:
     image: python:3.11-slim
     container_name: notifier
+    depends_on:
+      - couchdb
     volumes:
       - ./notifier.py:/app/notifier.py
+      - ./requirements.txt:/app/requirements.txt:ro
       - ./FirewallRootCertificate.crt:/usr/local/share/ca-certificates/FirewallRootCertificate.crt:ro
     environment:
-      TZ: "Europe/Oslo"
       PYTHONUNBUFFERED: "1"
       COUCHDB_BASE_URL: ${COUCHDB_BASE_URL}
       COUCHDB_DATABASE: ${COUCHDB_DATABASE}
@@ -58,6 +60,6 @@ services:
       TOPIC_NAME: ${NOTIFIER_TOPIC_NAME}
     command: >
       sh -c "cat /usr/local/share/ca-certificates/FirewallRootCertificate.crt >> /etc/ssl/certs/ca-certificates.crt &&
-             pip install --no-cache-dir --cert /etc/ssl/certs/ca-certificates.crt requests &&
+             pip install --no-cache-dir --cert /etc/ssl/certs/ca-certificates.crt -r /app/requirements.txt &&
              python /app/notifier.py $$NTFY_BASE_URL $$FILE_PATH $$TOPIC_NAME --loop"
     restart: always

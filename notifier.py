@@ -5,6 +5,7 @@ import sys
 import argparse
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 COUCHDB_USER = os.getenv('COUCHDB_USER')
 COUCHDB_PASSWORD = os.getenv('COUCHDB_PASSWORD')
@@ -49,6 +50,21 @@ def read_file(file_path):
 
 DAY_NAMES = {'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3, 'friday': 4, 'saturday': 5, 'sunday': 6}
 
+def parse_timezone(lines):
+    """Scan lines for 'location: <IANA timezone>' and return a ZoneInfo object."""
+    location_pattern = re.compile(r'^\s*location:\s*(.+)\s*$', re.IGNORECASE)
+    for line in lines:
+        match = location_pattern.match(line)
+        if match:
+            tz_name = match.group(1).strip()
+            try:
+                return ZoneInfo(tz_name)
+            except (KeyError, Exception) as ex:
+                print(f"Error: Invalid timezone '{tz_name}': {ex}")
+                return None
+    print("Error: No 'location:' declaration found in file. Cannot determine timezone.")
+    return None
+
 def is_due_within_window(due, now):
     #Check if due time just passed within the poll interval + drift tolerance
     return due <= now and (now - due).total_seconds() <= POLL_INTERVAL_SECONDS + DRIFT_TOLERANCE_SECONDS
@@ -67,6 +83,12 @@ def process_todos(file_path):
     todos = []
 
     lines = read_file(file_path)
+    if not lines:
+        return todos
+
+    tz = parse_timezone(lines)
+    if not tz:
+        return todos
 
     for line in lines:
         match = todo_pattern.match(line)
@@ -79,8 +101,8 @@ def process_todos(file_path):
                 time_only_match = time_only_pattern.search(todo_text)
                 if datetime_match and datetime_match.group(1):
                     try:
-                        now = datetime.now()
-                        due = datetime.strptime(datetime_match.group(1), '%Y-%m-%d %H:%M')
+                        now = datetime.now(tz)
+                        due = datetime.strptime(datetime_match.group(1), '%Y-%m-%d %H:%M').replace(tzinfo=tz)
                         # Turns into daily reminder after due date (modulo 86400s)
                         if due <= now and (now - due).total_seconds() % 86400 <= POLL_INTERVAL_SECONDS + DRIFT_TOLERANCE_SECONDS:
                             todos.append(todo_text)
@@ -88,33 +110,33 @@ def process_todos(file_path):
                         print(f"Warning: Invalid datetime format in line: {line.strip()}")
                 elif monthly_match:
                     try:
-                        now = datetime.now()
+                        now = datetime.now(tz)
                         day_of_month = int(monthly_match.group(1))
                         time_str = monthly_match.group(2)
                         if now.day == day_of_month:
-                            due = datetime.strptime(time_str, '%H:%M').replace(year=now.year, month=now.month, day=now.day)
+                            due = datetime.strptime(time_str, '%H:%M').replace(year=now.year, month=now.month, day=now.day, tzinfo=tz)
                             if is_due_within_window(due, now):
                                 todos.append(todo_text)
                     except ValueError:
                         print(f"Warning: Invalid monthly format in line: {line.strip()}")
                 elif weekly_match:
                     try:
-                        now = datetime.now()
+                        now = datetime.now(tz)
                         day_name = weekly_match.group(1).lower()
                         time_str = weekly_match.group(2)
                         if day_name not in DAY_NAMES:
                             print(f"Warning: Unknown day name '{day_name}' in line: {line.strip()}")
                             continue
                         if now.weekday() == DAY_NAMES[day_name]:
-                            due = datetime.strptime(time_str, '%H:%M').replace(year=now.year, month=now.month, day=now.day)
+                            due = datetime.strptime(time_str, '%H:%M').replace(year=now.year, month=now.month, day=now.day, tzinfo=tz)
                             if is_due_within_window(due, now):
                                 todos.append(todo_text)
                     except ValueError:
                         print(f"Warning: Invalid weekly format in line: {line.strip()}")
                 elif time_only_match and time_only_match.group(1):
                     try:
-                        now = datetime.now()
-                        due = datetime.strptime(time_only_match.group(1), '%H:%M').replace(year=now.year, month=now.month, day=now.day)
+                        now = datetime.now(tz)
+                        due = datetime.strptime(time_only_match.group(1), '%H:%M').replace(year=now.year, month=now.month, day=now.day, tzinfo=tz)
                         if is_due_within_window(due, now):
                             todos.append(todo_text)
                     except ValueError:
