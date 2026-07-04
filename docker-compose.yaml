@@ -16,6 +16,7 @@ services:
 
   ntfy:
     image: binwiederhier/ntfy
+    container_name: ntfy
     command:
       - sh
       - -c
