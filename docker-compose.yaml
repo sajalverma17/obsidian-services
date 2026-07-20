@@ -11,44 +11,45 @@ services:
       - ./config:/opt/couchdb/etc/local.d
     ports:
       - 5984:5984
-    restart: unless-stopped
     stop_grace_period: 20s
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5984/_up"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   ntfy:
     image: binwiederhier/ntfy
     container_name: ntfy
     command:
-      - sh
-      - -c
-      - "cat /usr/local/share/ca-certificates/FirewallRootCertificate.crt >> /etc/ssl/certs/ca-certificates.crt && ntfy serve"
-    entrypoint: []
+      - serve
     environment:
+      # Must be public URL reachable by notification receivers
       NTFY_BASE_URL: ${NTFY_BASE_URL}
       NTFY_UPSTREAM_BASE_URL: "https://ntfy.sh"
-    # Required for upstream HTTP requests to ntfy servers from behind firewall
-    volumes:
-      - ./FirewallRootCertificate.crt:/usr/local/share/ca-certificates/FirewallRootCertificate.crt:ro
     ports:
       - "5985:80"
+    init: true
+    stop_grace_period: 20s
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q --tries=1 http://localhost:80/v1/health -O - | grep -Eo '\"healthy\"\\s*:\\s*true' || exit 1"]
       interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 40s
-    init: true
-    stop_grace_period: 20s
+      start_period: 60s
 
   notifier:
     image: python:3.11-slim
     container_name: notifier
     depends_on:
       - couchdb
+      - ntfy
     volumes:
       - ./notifier.py:/app/notifier.py
       - ./requirements.txt:/app/requirements.txt:ro
-      - ./FirewallRootCertificate.crt:/usr/local/share/ca-certificates/FirewallRootCertificate.crt:ro
     environment:
       PYTHONUNBUFFERED: "1"
       COUCHDB_BASE_URL: ${COUCHDB_BASE_URL}
@@ -60,7 +61,6 @@ services:
       FILE_PATH: ${NOTIFIER_FILE_PATH} # Case-sensitive file path relative to vault root
       TOPIC_NAME: ${NOTIFIER_TOPIC_NAME}
     command: >
-      sh -c "cat /usr/local/share/ca-certificates/FirewallRootCertificate.crt >> /etc/ssl/certs/ca-certificates.crt &&
-             pip install --no-cache-dir --cert /etc/ssl/certs/ca-certificates.crt -r /app/requirements.txt &&
+      sh -c "pip install --no-cache-dir -r /app/requirements.txt &&
              python /app/notifier.py $$NTFY_BASE_URL $$FILE_PATH $$TOPIC_NAME --loop"
     restart: always
